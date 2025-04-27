@@ -1,0 +1,7 @@
+Data/DataEnem.rar
+Data/DataCortes.rar
+Data/enem_todos_os_anos.csv
+venv/
+.ipynb_checkpoints/
+*.pyc
+*.pyo
