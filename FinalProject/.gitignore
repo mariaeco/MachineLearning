@@ -1,6 +1,8 @@
 Data/DataEnem.rar
 Data/DataCortes.rar
 Data/enem_todos_os_anos.csv
+Data/dados_educ.csv
+Projeto_Final_Educ.ipynb
 venv/
 .ipynb_checkpoints/
 *.pyc
