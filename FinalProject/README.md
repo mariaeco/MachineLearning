@@ -44,3 +44,18 @@ Este projeto aplica técnicas de aprendizado de máquina para analisar e prever 
 
 **Variáveis Utilizadas**
 
+### 📂 Estrutura de Arquivos do Projeto
+
+- **Projeto_Final_Educ.ipynb**: Contém scripts e notebooks relacionados à análise e visualização dos dados educacionais, incluindo gráficos e relatórios descritivos.
+
+- **Projeto_Final_Enem.ipynb**: Inclui os modelos de aprendizado de máquina desenvolvidos para predição de desempenho no Enem, bem como os experimentos realizados com diferentes algoritmos.
+
+- **modelos.py**: módulo com os modelos DecisionTree, SVM e Redes Neurais
+
+- **Tratamentos de Dados**:
+   - **includingLabels.ipynb**: Script responsável por adicionar rótulos e categorias aos dados brutos, facilitando a análise e modelagem.
+   - **dataPB_Selection.ipynb**: Realiza a seleção de dados específicos da Paraíba, filtrando informações relevantes para o estudo.
+   - **data_cleaning.ipynb**: Contém funções para limpeza e pré-processamento dos dados, como remoção de valores ausentes, normalização e transformação de variáveis.
+
+- **Analise Descritiva**:
+   - **AnaliseDescritiva.ipynb**: scripts com análise geral para entendimento do dado.
