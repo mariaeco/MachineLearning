@@ -210,19 +210,17 @@ def plotar_matriz_confusao(y_true, y_pred, classes):
     plt.show()
 
 # REDE NEURAL --------------------------------------------------------------------------------------------
-def modelo_rede_neural(X_train, X_test, y_train, y_test, input_dim, output_dim):
+def modelo_rede_neural(X_train, X_test, y_train, y_test, input_dim, output_dim, n_neurons):
     """
     Treina um modelo de Rede Neural simples.
     """
-    # Ajustar os rótulos para começar em 0
-    # y_train = y_train - 1
-    # y_test = y_test - 1
+    
     # Modelo sequencial básico
     model = Sequential()
 
     # Adicionar camadas
-    model.add(Dense(32, input_dim=X_train.shape[1],  activation='relu'))
-    model.add(Dense(16, activation='relu'))
+    model.add(Dense(n_neurons, input_dim=X_train.shape[1],  activation='relu'))
+    # model.add(Dense(20, activation='relu'))
     model.add(Dense(output_dim, kernel_initializer='normal', activation='softmax')) # softmax para multi-classe #sigmoid se binário
 
     sgd = optimizers.SGD(learning_rate=0.01)
@@ -238,7 +236,7 @@ def modelo_rede_neural(X_train, X_test, y_train, y_test, input_dim, output_dim):
         validation_split=0.2,
         epochs=100,
         batch_size=256,
-        # callbacks=[early_stopping],
+        callbacks=[early_stopping],
         verbose=0
     )
 
@@ -253,14 +251,61 @@ def modelo_rede_neural(X_train, X_test, y_train, y_test, input_dim, output_dim):
     print(f"Ein: {Ein:.4f}")
     print(f"Eout: {Eout:.4f}")
 
-    # Plotando curva de treino
-    plt.figure(figsize=(8,6))
+
+    # métricas de avaliação
+    y_pred = model.predict(X_test)
+    y_pred = y_pred.round()
+
+    plt.figure(figsize=(12, 4))
+    
+    # Plot do Loss
+    plt.subplot(1, 2, 1)
     plt.plot(history.history['loss'], label='Loss treino')
     plt.plot(history.history['val_loss'], label='Loss validação')
     plt.xlabel('Épocas')
     plt.ylabel('Loss')
     plt.legend()
     plt.title('Loss x Épocas')
+    
+    # Plot da Accuracy
+    plt.subplot(1, 2, 2)
+    plt.plot(history.history['accuracy'], label='Acurácia treino')
+    plt.plot(history.history['val_accuracy'], label='Acurácia validação')
+    plt.xlabel('Épocas')
+    plt.ylabel('Acurácia')
+    plt.legend()
+    plt.title('Acurácia x Épocas')
+    
+    plt.tight_layout()
     plt.show()
 
+    # Avaliações
+    train_loss, train_acc = model.evaluate(X_train, y_train, verbose=0)
+    test_loss, test_acc = model.evaluate(X_test, y_test, verbose=0)
+
+    Ein = 1 - train_acc
+    Eout = 1 - test_acc
+
+    print("\nMétricas de Avaliação:")
+    print(f"Acurácia de Treino: {train_acc:.4f}")
+    print(f"Acurácia de Teste: {test_acc:.4f}")
+    print(f"Ein: {Ein:.4f}")
+    print(f"Eout: {Eout:.4f}")
+
+    # Predições e métricas de classificação
+    y_pred = model.predict(X_test)
+    y_pred_classes = np.argmax(y_pred, axis=1)
+    y_test_classes = y_test
+
+    print("\nRelatório de Classificação:")
+    print(classification_report(y_test_classes, y_pred_classes))
+
+    # Matriz de Confusão
+    plt.figure(figsize=(8, 6))
+    cm = confusion_matrix(y_test_classes, y_pred_classes)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.title('Matriz de Confusão')
+    plt.xlabel('Predito')
+    plt.ylabel('Real')
+    plt.show()
     return model
