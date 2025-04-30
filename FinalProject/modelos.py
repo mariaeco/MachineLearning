@@ -8,13 +8,16 @@ import seaborn as sns
 
 # Machine Learning
 from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import StratifiedKFold
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report, confusion_matrix
+
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
+
 
 from keras import optimizers
 
@@ -31,13 +34,7 @@ def modelo_arvore_decisao(X_train, X_test, y_train, y_test):
     path = clf.cost_complexity_pruning_path(X_train, y_train)
     ccp_alphas = path.ccp_alphas
 
-    #ccp_alphas são os valores de poda
-    if len(ccp_alphas) > 20:
-        ccp_alphas = np.linspace(min(ccp_alphas), max(ccp_alphas), 20)
     ccp_alphas = ccp_alphas[ccp_alphas >= 1e-10]  #remover valores muito pequenos
-    
-
-
     
     param_grid = {'ccp_alpha': ccp_alphas}
     grid_search = GridSearchCV( #GridSearchCV faz o ajuste automatico dos hiperparametros
@@ -89,7 +86,7 @@ def modelo_arvore_decisao(X_train, X_test, y_train, y_test):
 #-- CALCULO DA PROFUNDIDADE DA ÁRVORE  --------------------------------------------------------------------------------------------
 
 def best_depth_for_tree(X_train, X_test, y_train, y_test):
-    max_depth = [i for i in range(1, 15)]
+    max_depth = [i for i in range(1, 20)]
     tree_metrics_dict_val = {i: {'train_accuracy': None, 'test_accuracy': None, 'precision': None, 'recall': None, 'f1': None} for i in max_depth}
 
     """
@@ -169,13 +166,13 @@ def modelo_svm(X_train, X_test, y_train, y_test):
     """
 
     param_grid = {
-        'C': [10],
-        'gamma': [0.1] 
+        'C': [10,100,1000],
+        'gamma': [0.1,0.01,0.001], 
     }
 
     grid = GridSearchCV(SVC(kernel='rbf', random_state=0), 
                         param_grid=param_grid, 
-                        cv=3, 
+                        cv=10, 
                         n_jobs=-1, 
                         verbose=0)
 
@@ -211,91 +208,117 @@ def plotar_matriz_confusao(y_true, y_pred, classes):
 
 # REDE NEURAL --------------------------------------------------------------------------------------------
 def modelo_rede_neural(X_train, X_test, y_train, y_test, input_dim, output_dim, n_neurons):
-    """
-    Treina um modelo de Rede Neural simples.
-    """
     
-    # Modelo sequencial básico
-    model = Sequential()
-
-    # Adicionar camadas
-    model.add(Dense(n_neurons, input_dim=X_train.shape[1],  activation='relu'))
-    # model.add(Dense(20, activation='relu'))
-    model.add(Dense(output_dim, kernel_initializer='normal', activation='softmax')) # softmax para multi-classe #sigmoid se binário
-
-    sgd = optimizers.SGD(learning_rate=0.01)
-
-    # Compilar
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    # Early Stopping
-    early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-
-    # Treinamento
-    history = model.fit(
-        X_train, y_train,
-        validation_split=0.2,
-        epochs=100,
-        batch_size=256,
-        callbacks=[early_stopping],
-        verbose=0
-    )
-
-    # Avaliações
-    train_loss, train_acc = model.evaluate(X_train, y_train, verbose=0)
-    test_loss, test_acc = model.evaluate(X_test, y_test, verbose=0)
-
-    Ein = 1 - train_acc
-    Eout = 1 - test_acc
-
-    print("Rede Neural")
-    print(f"Ein: {Ein:.4f}")
-    print(f"Eout: {Eout:.4f}")
-
-
-    # métricas de avaliação
-    y_pred = model.predict(X_test)
-    y_pred = y_pred.round()
-
-    plt.figure(figsize=(12, 4))
+    if isinstance(X_train, pd.DataFrame):
+        X_train = X_train.values
+    if isinstance(X_test, pd.DataFrame):
+        X_test = X_test.values
+    if isinstance(y_train, pd.Series):
+        y_train = y_train.values
+    if isinstance(y_test, pd.Series):
+        y_test = y_test.values
     
-    # Plot do Loss
-    plt.subplot(1, 2, 1)
-    plt.plot(history.history['loss'], label='Loss treino')
-    plt.plot(history.history['val_loss'], label='Loss validação')
-    plt.xlabel('Épocas')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.title('Loss x Épocas')
+    skf = StratifiedKFold(n_splits=5, shuffle=True)
     
-    # Plot da Accuracy
-    plt.subplot(1, 2, 2)
-    plt.plot(history.history['accuracy'], label='Acurácia treino')
-    plt.plot(history.history['val_accuracy'], label='Acurácia validação')
-    plt.xlabel('Épocas')
-    plt.ylabel('Acurácia')
-    plt.legend()
-    plt.title('Acurácia x Épocas')
-    
-    plt.tight_layout()
+    accuracies_train = []
+    accuracies_val = []
+    history_list = []
+    ein_list = []
+    eval_list = []
+
+    i = 0
+    for train_index, val_index in skf.split(X_train, y_train):
+        i = i + 1
+        X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+        y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+        
+        # Criando a arquitetura da rede neural    
+        model = Sequential()
+        
+                
+        # Model 2
+        model.add(Dense(units=n_neurons, input_dim=input_dim, kernel_initializer='normal', activation='relu'))
+        model.add(Dense(1, kernel_initializer='normal', activation='sigmoid'))
+
+        # Compilar o modelo
+        
+        model.compile(loss='binary_crossentropy', optimizer="adam", metrics=['accuracy'])
+
+
+        BATCH_SIZE = 256
+        # Treina o modelo
+        history = model.fit(X_train_fold, y_train_fold, validation_data=(X_val_fold, y_val_fold), epochs=100, batch_size=BATCH_SIZE, verbose=0)
+        history_list.append(history) 
+        
+
+
+        # Avalia o modelo
+        E_in, accuracy_train = model.evaluate(X_train_fold, y_train_fold, batch_size=BATCH_SIZE, verbose=0)
+        E_val, accuracy_val = model.evaluate(X_val_fold, y_val_fold, batch_size=BATCH_SIZE, verbose=0)
+        
+        accuracies_train.append(accuracy_train)
+        accuracies_val.append(accuracy_val)
+        ein_list.append(E_in)
+        eval_list.append(E_val)    
+        
+        # # Exibe o historico de treinamento para um fold especifico
+        # plt.plot(history.history['loss'])
+        # plt.plot(history.history['val_loss'])
+        # plt.title(f'Metrica de erro - Fold {i}')
+        # plt.ylabel('Erro')
+        # plt.xlabel('Epoca')
+        # plt.legend(['Treinamento'])
+        # plt.show()
+
+        # print(f'--> Acuracia (treino): {accuracy_train:.4f}')
+        # print(f'--> Acuracia (validacao): {accuracy_val:.4f}')
+        # print(f"--> E_val - E_in = {E_val - E_in:.4f}")
+        # print(f"--> acc_in - acc_val = {accuracy_train - accuracy_val:.4f}\n")    
+
+    # Calcula a acuracia media
+    avg_accuracy_train = np.mean(accuracies_train)
+    avg_accuracy_val = np.mean(accuracies_val)
+    avg_ein = np.mean(ein_list)
+    avg_eval = np.mean(eval_list)
+
+    # Historico com valores medios dos folds
+    history_loss_avg = []
+    history_val_loss_avg = []
+    aux_list1 = []
+    aux_list2 = []
+
+    for i in range(len(history.history['loss'])):
+        for j in range(len(history_list)):
+            aux_list1.append(history_list[j].history['loss'][i])
+            aux_list2.append(history_list[j].history['val_loss'][i])
+        history_loss_avg.append(np.mean(aux_list1))
+        history_val_loss_avg.append(np.mean(aux_list2))                            
+                    
+    plt.plot(history_loss_avg)
+    plt.plot(history_val_loss_avg)
+    plt.title('Metrica de erro - Media dos Folds')
+    plt.ylabel('Erro')
+    plt.xlabel('Epoca')
+    plt.legend(['Treinamento','Validacao'])
     plt.show()
 
-    # Avaliações
-    train_loss, train_acc = model.evaluate(X_train, y_train, verbose=0)
-    test_loss, test_acc = model.evaluate(X_test, y_test, verbose=0)
+    print(f'--> Acuracia (treino): {avg_accuracy_train:.4f}')
+    print(f'--> Acuracia (validacao): {avg_accuracy_val:.4f}')
+    print(f"--> E_in = {avg_ein:.4f}")
+    print(f"--> E_val = {avg_eval:.4f}")
+    print(f"--> E_val - E_in = {avg_eval - avg_ein:.4f}")
+    print(f"--> acc_in - acc_val = {avg_accuracy_train - avg_accuracy_val:.4f}\n")    
 
-    Ein = 1 - train_acc
-    Eout = 1 - test_acc
+    # Obtendo a acuracia no conjunto de teste
+    E_out, acc_test = model.evaluate(X_test, y_test, verbose=0)
 
-    print("\nMétricas de Avaliação:")
-    print(f"Acurácia de Treino: {train_acc:.4f}")
-    print(f"Acurácia de Teste: {test_acc:.4f}")
-    print(f"Ein: {Ein:.4f}")
-    print(f"Eout: {Eout:.4f}")
+    print(f"--> E_out = {E_out:.4f}")
+    print(f'--> Acuracia (teste): {acc_test:.4f}')
 
-    # Predições e métricas de classificação
-    y_pred = model.predict(X_test)
-    y_pred_classes = np.argmax(y_pred, axis=1)
-    y_test_classes = y_test
+
+    # Converte as previsões e os rótulos reais para classes binárias
+    y_pred_classes = (model.predict(X_test) > 0.5).astype("int32").flatten()
+    y_test_classes = y_test.flatten()
 
     print("\nRelatório de Classificação:")
     print(classification_report(y_test_classes, y_pred_classes))
@@ -303,7 +326,7 @@ def modelo_rede_neural(X_train, X_test, y_train, y_test, input_dim, output_dim, 
     # Matriz de Confusão
     plt.figure(figsize=(8, 6))
     cm = confusion_matrix(y_test_classes, y_pred_classes)
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Classe 0', 'Classe 1'], yticklabels=['Classe 0', 'Classe 1'])
     plt.title('Matriz de Confusão')
     plt.xlabel('Predito')
     plt.ylabel('Real')
